@@ -1,6 +1,5 @@
 import { getProfiles } from '../engine/weights';
 import { formatReport, simulateMode, type ModeReport } from './stats';
-import type { Mode } from '../engine/types';
 
 function arg(name: string, fallback: number): number {
   const index = process.argv.indexOf(name);
@@ -10,10 +9,10 @@ function arg(name: string, fallback: number): number {
 }
 
 const seed = arg('--seed', 20261021);
-const baseN = arg('--spins', 8_000_000);
-const anteN = arg('--antes', 3_000_000);
-const buyN = arg('--buys', 250_000);
-const superN = arg('--supers', 150_000);
+const baseN = arg('--spins', 100_000_000);
+const anteN = arg('--antes', 40_000_000);
+const buyN = arg('--buys', 1_000_000);
+const superN = arg('--supers', 500_000);
 
 const started = performance.now();
 const reports: ModeReport[] = [
@@ -44,10 +43,20 @@ const lines = [
 const text = lines.join('\n');
 process.stdout.write(text);
 
-const failed = (mode: Mode, target = 0.965, tol = 0.015) => {
+const TARGET = 0.963;
+const TOL = 0.002;
+const rtps = reports.map((report) => report.rtp);
+const spread = Math.max(...rtps) - Math.min(...rtps);
+let failed = spread > 0.005;
+for (const mode of ['base', 'ante', 'buy', 'super'] as const) {
   const report = reports.find((item) => item.mode === mode);
-  return report ? Math.abs(report.rtp - target) > tol : true;
-};
-if (failed('base', 0.965, 0.02) || failed('buy', 0.965, 0.025)) {
-  process.stderr.write('\nRTP is outside the publish tolerance. Retune weights.\n');
+  const off = !report || Math.abs(report.rtp - TARGET) > TOL;
+  if (off) failed = true;
+}
+if (failed) {
+  const detail = reports.map((report) => `${report.mode} ${(report.rtp * 100).toFixed(3)}%`).join(', ');
+  process.stderr.write(
+    `\nRTP is outside ±0.2pp of 96.30% or the modes differ by more than 0.5pp (${detail}, spread ${(spread * 100).toFixed(3)}pp).\n`,
+  );
+  process.exit(1);
 }

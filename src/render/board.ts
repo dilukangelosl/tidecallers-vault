@@ -15,9 +15,11 @@ export interface Pace {
 interface Cell {
   root: Container;
   sprite: Sprite;
+  badge: Graphics;
   mult: Text;
   ring: Graphics;
   anim: AnimatedSprite | null;
+  clipKey: string;
   col: number;
   row: number;
   symbol: number;
@@ -37,6 +39,8 @@ export class Board {
   private readonly cells: Cell[] = [];
   private cell = 96;
   private token = 0;
+  private jobs: (() => boolean)[] = [];
+  private pumping = false;
   filled = false;
   anticipating = false;
 
@@ -60,19 +64,34 @@ export class Board {
             fill: '#fff6d2',
             fontFamily: 'Palatino Linotype, Palatino, Georgia, serif',
             fontSize: 28,
-            fontWeight: '700',
+            fontWeight: '800',
             stroke: { color: '#04141c', width: 4 },
             align: 'center',
           },
         });
         mult.anchor.set(0.5);
+        const badge = new Graphics();
+        badge.visible = false;
         const ring = new Graphics();
         ring.alpha = 0;
         root.addChild(sprite);
         root.addChild(ring);
+        root.addChild(badge);
         root.addChild(mult);
         this.cellsRoot.addChild(root);
-        this.cells.push({ root, sprite, mult, ring, anim: null, col, row, symbol: 0, value: 0 });
+        this.cells.push({
+          root,
+          sprite,
+          badge,
+          mult,
+          ring,
+          anim: null,
+          clipKey: '',
+          col,
+          row,
+          symbol: 0,
+          value: 0,
+        });
       }
     }
   }
@@ -95,11 +114,14 @@ export class Board {
       }
     }
     this.maskG.clear();
-    this.maskG.rect(-6, -cell * 0.25, w + 12, h + cell * 0.45).fill(0xffffff);
+    this.maskG.rect(-4, -6, w + 8, h + 10).fill(0xffffff);
     this.glow.clear();
     this.glow.roundRect(-6, -6, w + 12, h + 12, 18).stroke({ width: 7, color: 0xff4fa3, alpha: 1 });
     this.glow.alpha = 0;
-    for (const cellView of this.cells) this.fit(cellView);
+    for (const cellView of this.cells) {
+      this.fit(cellView);
+      cellView.root.position.set(this.x(cellView.col), this.y(cellView.row));
+    }
   }
 
   update(time: number): void {
@@ -129,15 +151,38 @@ export class Board {
     }
   }
 
-  crackSeals(): void {
+  /** Play the seal crack. Returns grid indexes so the scene can add the bubble wave. */
+  crackSeals(): number[] {
+    const hit: number[] = [];
+    const seal = this.heroes.clips.get('vault-seal');
     for (const cell of this.cells) {
-      if (cell.symbol === SYM.SCATTER) cell.sprite.texture = this.art.sealCrack;
+      if (cell.symbol !== SYM.SCATTER) continue;
+      hit.push(this.index(cell));
+      if (seal?.clips.crack) {
+        this.setClip(cell, seal, 'crack');
+        cell.sprite.visible = false;
+        const anim = cell.anim;
+        if (anim) {
+          anim.loop = false;
+          anim.onComplete = () => {
+            if (cell.symbol === SYM.SCATTER && seal.clips.idle) this.setClip(cell, seal, 'idle');
+          };
+        }
+      } else {
+        cell.sprite.texture = this.art.sealCrack;
+        cell.sprite.visible = true;
+      }
     }
+    return hit;
   }
 
   skip(): void {
     this.token++;
     this.anticipating = false;
+  }
+
+  repaint(): void {
+    for (const cell of this.cells) this.paint(cell, cell.symbol, cell.value);
   }
 
   center(index: number): { x: number; y: number } {
@@ -181,8 +226,8 @@ export class Board {
         cell.root.scale.set(1);
         cell.ring.alpha = 0;
         const target = this.y(row);
-        cell.root.position.set(this.x(col), target - this.cell * (7 + row * 0.15));
-        falls.push(this.slideY(cell.root, cell.root.y, target, pace.fall + row * 18, token, true));
+        cell.root.position.set(this.x(col), target - this.cell * (ROWS - row + 1));
+        falls.push(this.slideY(cell.root, cell.root.y, target, pace.fall + row * 28, token, true));
       }
       const landed = await Promise.all(falls);
       if (!landed.every(Boolean) || token !== this.token) return false;
@@ -205,7 +250,7 @@ export class Board {
           return;
         }
         const t = Math.min(1, (performance.now() - started) / pace.pop);
-        const scale = 1 + Math.sin(t * Math.PI) * 0.18;
+        const scale = 1 + Math.sin(t * Math.PI) * 0.28;
         for (const cell of this.cells) {
           const on = (mask & (1 << this.index(cell))) !== 0;
           cell.root.scale.set(on ? scale : 1);
@@ -230,7 +275,7 @@ export class Board {
           resolve(false);
           return;
         }
-        const t = Math.min(1, (performance.now() - started) / (pace.pop * 0.85));
+        const t = Math.min(1, (performance.now() - started) / (pace.pop * 1.15));
         for (const cell of this.cells) {
           if ((mask & (1 << this.index(cell))) === 0) continue;
           const fade = 1 - t;
@@ -314,8 +359,9 @@ export class Board {
     cell.value = value;
     const jelly = this.heroes.clips.get('jellyfish');
     const seal = this.heroes.clips.get('vault-seal');
+    const jellyClip = value >= 10 && jelly?.clips.pulse ? 'pulse' : 'float';
     const clip = symbol === SYM.JELLY ? jelly : symbol === SYM.SCATTER ? seal : null;
-    const clipName = symbol === SYM.JELLY ? 'float' : 'idle';
+    const clipName = symbol === SYM.JELLY ? jellyClip : 'idle';
     this.setClip(cell, clip && clip.clips[clipName] ? clip : null, clipName);
     cell.sprite.texture = this.art.symbols[symbol] ?? this.art.symbols[0];
     cell.sprite.visible = !cell.anim;
@@ -325,14 +371,20 @@ export class Board {
   }
 
   private setClip(cell: Cell, asset: PixiOpal | null, name: string): void {
+    const key = asset ? `${cell.symbol}:${name}` : '';
+    if (cell.anim && cell.clipKey === key && key) return;
     if (cell.anim) {
       cell.anim.destroy();
       cell.anim = null;
+      cell.clipKey = '';
     }
-    if (!asset) return;
-    const anim = asset.sprite(name, { anchor: { x: 0.5, y: 0.5 } });
+    if (!asset || !key) return;
+    const anchor = name === 'float' || name === 'pulse' || name === 'burst' ? { x: 0.5, y: 0.42 } : { x: 0.5, y: 0.5 };
+    const anim = asset.sprite(name, { anchor });
     cell.root.addChildAt(anim, 1);
     cell.anim = anim;
+    cell.clipKey = key;
+    this.fit(cell);
   }
 
   private fit(cell: Cell): void {
@@ -343,8 +395,16 @@ export class Board {
       cell.anim.width = size;
       cell.anim.scale.y = Math.abs(cell.anim.scale.x);
     }
-    cell.mult.style.fontSize = Math.max(12, this.cell * 0.24);
-    cell.mult.y = this.cell * 0.28;
+    const font = Math.max(13, Math.round(this.cell * 0.22));
+    cell.mult.style.fontSize = font;
+    cell.mult.y = this.cell * 0.3;
+    const bw = Math.max(28, this.cell * 0.46);
+    const bh = Math.max(16, this.cell * 0.22);
+    cell.badge.clear();
+    cell.badge.roundRect(-bw / 2, -bh / 2, bw, bh, bh / 2).fill({ color: 0x04141c, alpha: 0.88 });
+    cell.badge.roundRect(-bw / 2, -bh / 2, bw, bh, bh / 2).stroke({ width: 2, color: 0xff4fa3, alpha: 0.95 });
+    cell.badge.position.set(0, cell.mult.y);
+    cell.badge.visible = cell.mult.visible;
     cell.ring.clear();
     cell.ring.circle(0, 0, this.cell * 0.4).stroke({ width: Math.max(2, this.cell * 0.035), color: 0xb8fff4, alpha: 1 });
   }
@@ -352,26 +412,29 @@ export class Board {
   private wait(ms: number, token: number): Promise<boolean> {
     return new Promise((resolve) => {
       const started = performance.now();
-      const step = () => {
+      this.jobs.push(() => {
         if (token !== this.token) {
           resolve(false);
-          return;
+          return false;
         }
-        if (performance.now() - started >= ms) resolve(true);
-        else requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+        if (performance.now() - started >= ms) {
+          resolve(true);
+          return false;
+        }
+        return true;
+      });
+      this.pump();
     });
   }
 
   private slideY(node: Container, from: number, to: number, ms: number, token: number, bounce: boolean): Promise<boolean> {
     node.y = from;
+    const started = performance.now();
     return new Promise((resolve) => {
-      const started = performance.now();
-      const step = () => {
+      this.jobs.push(() => {
         if (token !== this.token) {
           resolve(false);
-          return;
+          return false;
         }
         const t = Math.min(1, (performance.now() - started) / Math.max(40, ms));
         const eased = bounce ? fallEase(t) : t * t;
@@ -379,12 +442,24 @@ export class Board {
         if (t >= 1) {
           node.y = to;
           resolve(true);
-          return;
+          return false;
         }
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+        return true;
+      });
+      this.pump();
     });
+  }
+
+  /** One frame callback drives every drop, so a tumble does not schedule dozens of loops. */
+  private pump(): void {
+    if (this.pumping) return;
+    this.pumping = true;
+    const step = () => {
+      this.jobs = this.jobs.filter((job) => job());
+      if (this.jobs.length > 0) requestAnimationFrame(step);
+      else this.pumping = false;
+    };
+    requestAnimationFrame(step);
   }
 }
 

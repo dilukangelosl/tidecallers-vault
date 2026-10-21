@@ -245,9 +245,10 @@ export function playRoundFromSources(mode: Mode, sources: Sources, trace: boolea
 
 export function playRound(rng: Rng, mode: Mode, trace = false, session?: Session): RoundResult {
   const baseKind = mode === 'ante' ? 'ante' : 'base';
+  const fsKind = mode === 'super' ? 'super' : 'fs';
   return playRoundFromSources(
     mode,
-    { base: samplerFromRng(rng, baseKind), fs: samplerFromRng(rng, 'fs') },
+    { base: samplerFromRng(rng, baseKind), fs: samplerFromRng(rng, fsKind) },
     trace,
     session,
   );

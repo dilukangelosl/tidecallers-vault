@@ -1,8 +1,12 @@
 export class AudioBus {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private musicNode: GainNode | null = null;
+  private sfxNode: GainNode | null = null;
   private ambient: AudioBufferSourceNode | null = null;
   muted = false;
+  music = 1;
+  sfx = 1;
   /** Set only from a user gesture so autoplay policy never logs a warning. */
   private armed = false;
   private started = false;
@@ -14,8 +18,14 @@ export class AudioBus {
       if (!Ctx) return null;
       this.ctx = new Ctx();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.22;
+      this.master.gain.value = this.muted ? 0 : 0.22;
       this.master.connect(this.ctx.destination);
+      this.musicNode = this.ctx.createGain();
+      this.musicNode.gain.value = this.music;
+      this.musicNode.connect(this.master);
+      this.sfxNode = this.ctx.createGain();
+      this.sfxNode.gain.value = this.sfx;
+      this.sfxNode.connect(this.master);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
@@ -44,7 +54,7 @@ export class AudioBus {
     gain.gain.value = 0.18;
     source.connect(filter);
     filter.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.musicNode ?? this.master);
     source.start();
     this.ambient = source;
     this.tone(92, 3.2, 'sine', 0.03);
@@ -71,7 +81,7 @@ export class AudioBus {
     amp.gain.exponentialRampToValueAtTime(gain, t + 0.015);
     amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(amp);
-    amp.connect(this.master);
+    amp.connect(this.sfxNode ?? this.master);
     osc.start(t);
     osc.stop(t + dur + 0.02);
   }
@@ -119,8 +129,23 @@ export class AudioBus {
     this.tone(98, 1.1, 'sine', 0.07, 0, 70);
   }
 
+  setMusic(value: number): void {
+    this.music = clamp01(value);
+    if (this.musicNode) this.musicNode.gain.value = this.music;
+  }
+
+  setSfx(value: number): void {
+    this.sfx = clamp01(value);
+    if (this.sfxNode) this.sfxNode.gain.value = this.sfx;
+  }
+
   stopAmbient(): void {
     this.ambient?.stop();
     this.ambient = null;
   }
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(1, value));
 }

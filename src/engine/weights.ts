@@ -1,6 +1,6 @@
 import { JELLY_VALUES } from './paytable';
 import { buildAlias, sampleAlias, type AliasTable, type Rng } from './rng';
-import { SYM, type Sampler, type WeightKind } from './types';
+import type { Sampler, WeightKind } from './types';
 
 /**
  * Relative weights. The Monte Carlo tuner wrote these; see SIMULATION.md.
@@ -26,15 +26,25 @@ export function jellyValueWeights(tail: number): number[] {
 }
 
 /**
- * Tuned for a 96.5% target. Base gem share is ~14.5% each so the hit rate
- * lands near 1 in 3.5. Free spins lean on the mask so the feature is worth
- * about 96×, while a thin jellyfish rate keeps the super-buy ratio near 5.
+ * Tuned for 96.30% on every mode. Base gem share stays near 14.5% so the
+ * hit rate holds around 1 in 3.5. Ante is its own strip: more Vault Seals
+ * than the base game, not a mechanical doubling, so the 1.25× stake still
+ * prices near the same RTP. Free spins lean on the mask. Super Buy uses the
+ * same symbols with a thinner jellyfish tail so the ×10 head start stays near the buy.
  */
 const INITIAL_BASE: Profile = {
   gems: [1450, 1450, 1450, 1450, 1450],
   highs: [676, 483, 386, 338, 531],
   scatter: 95,
-  jelly: 242,
+  jelly: 241,
+  jellyTail: 1.25,
+};
+
+const INITIAL_ANTE: Profile = {
+  gems: [1450, 1450, 1450, 1450, 1450],
+  highs: [676, 483, 386, 338, 531],
+  scatter: 190.8,
+  jelly: 240,
   jellyTail: 1.25,
 };
 
@@ -43,11 +53,22 @@ const INITIAL_FS: Profile = {
   highs: [160, 240, 340, 480, 862],
   scatter: 90,
   jelly: 28,
-  jellyTail: 0.84,
+  jellyTail: 0.83,
+};
+
+/** Same free-spin symbols as the buy, with a thinner jellyfish tail so the ×10 head start stays near 96.3%. */
+const INITIAL_SUPER: Profile = {
+  gems: [520, 520, 520, 520, 520],
+  highs: [160, 240, 340, 480, 862],
+  scatter: 90,
+  jelly: 27.4,
+  jellyTail: 0.82,
 };
 
 let baseProfile: Profile = clone(INITIAL_BASE);
+let anteProfile: Profile = clone(INITIAL_ANTE);
 let fsProfile: Profile = clone(INITIAL_FS);
+let superProfile: Profile = clone(INITIAL_SUPER);
 
 interface KindTables {
   symbol: AliasTable;
@@ -66,45 +87,43 @@ function clone(p: Profile): Profile {
   };
 }
 
-export function expandWeights(profile: Profile, doubleScatter: boolean): number[] {
-  const w = [...profile.gems, ...profile.highs, profile.scatter, profile.jelly];
-  if (doubleScatter) {
-    const sum = w.reduce((a, b) => a + b, 0);
-    const p = w[SYM.SCATTER] / sum;
-    const p2 = Math.min(0.95, p * 2);
-    const other = sum - w[SYM.SCATTER];
-    w[SYM.SCATTER] = (p2 * other) / (1 - p2);
-  }
-  return w;
+export function expandWeights(profile: Profile): number[] {
+  return [...profile.gems, ...profile.highs, profile.scatter, profile.jelly];
 }
 
 function rebuild(): void {
   tables = {
     base: {
-      symbol: buildAlias(expandWeights(baseProfile, false)),
+      symbol: buildAlias(expandWeights(baseProfile)),
       jelly: buildAlias(jellyValueWeights(baseProfile.jellyTail)),
     },
     ante: {
-      symbol: buildAlias(expandWeights(baseProfile, true)),
-      jelly: buildAlias(jellyValueWeights(baseProfile.jellyTail)),
+      symbol: buildAlias(expandWeights(anteProfile)),
+      jelly: buildAlias(jellyValueWeights(anteProfile.jellyTail)),
     },
     fs: {
-      symbol: buildAlias(expandWeights(fsProfile, false)),
+      symbol: buildAlias(expandWeights(fsProfile)),
       jelly: buildAlias(jellyValueWeights(fsProfile.jellyTail)),
+    },
+    super: {
+      symbol: buildAlias(expandWeights(superProfile)),
+      jelly: buildAlias(jellyValueWeights(superProfile.jellyTail)),
     },
   };
 }
 
 rebuild();
 
-export function setProfiles(base: Profile, fs: Profile): void {
+export function setProfiles(base: Profile, ante: Profile, fs: Profile, superFs?: Profile): void {
   baseProfile = clone(base);
+  anteProfile = clone(ante);
   fsProfile = clone(fs);
+  if (superFs) superProfile = clone(superFs);
   rebuild();
 }
 
-export function getProfiles(): { base: Profile; fs: Profile } {
-  return { base: clone(baseProfile), fs: clone(fsProfile) };
+export function getProfiles(): { base: Profile; ante: Profile; fs: Profile; super: Profile } {
+  return { base: clone(baseProfile), ante: clone(anteProfile), fs: clone(fsProfile), super: clone(superProfile) };
 }
 
 export function symbolProbability(kind: WeightKind, symbol: number): number {

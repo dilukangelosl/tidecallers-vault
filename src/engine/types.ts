@@ -22,7 +22,7 @@ export const SYMBOL_COUNT = 12;
 export const PAYING_COUNT = 10;
 
 export type Mode = 'base' | 'ante' | 'buy' | 'super';
-export type WeightKind = 'base' | 'ante' | 'fs';
+export type WeightKind = 'base' | 'ante' | 'fs' | 'super';
 
 export interface SymbolMeta {
   id: number;

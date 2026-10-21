@@ -302,13 +302,13 @@ test('the same seed replays exactly, traced or not', () => {
   }
 });
 
-test('ante exactly doubles the seal probability', () => {
+test('ante uses its own strip and lands more seals than the base game', () => {
   const base = symbolProbability('base', SYM.SCATTER);
   const ante = symbolProbability('ante', SYM.SCATTER);
-  assert.ok(base > 0 && base < 0.2);
-  assert.ok(Math.abs(ante - base * 2) < 1e-12);
+  assert.ok(base > 0 && base < 0.05);
+  assert.ok(ante > base * 1.2);
+  assert.ok(ante < base * 2.2);
   const baseGem = symbolProbability('base', SYM.GEM_CYAN);
   const anteGem = symbolProbability('ante', SYM.GEM_CYAN);
-  const scale = (1 - ante) / (1 - base);
-  assert.ok(Math.abs(anteGem - baseGem * scale) < 1e-12);
+  assert.ok(anteGem > 0 && anteGem < baseGem);
 });

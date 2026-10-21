@@ -1,9 +1,9 @@
 import { AnimatedSprite, Container, Graphics, Rectangle, Sprite, Text, type Application, type Filter } from 'pixi.js';
 import type { PixiOpal } from 'opal-sprites/pixi';
-import { TIDE_THRONE, tideStage } from '../engine/types';
+import { COLS, ROWS, TIDE_THRONE, tideStage } from '../engine/types';
 import type { ArtSet } from './art';
 import { Board } from './board';
-import { spawnVfx, type HeroLibrary } from './heroes';
+import { attachLayer, spawnLoop, spawnVfx, type HeroLibrary, type LoopedVfx } from './heroes';
 import { createWaterFilter, waterUniforms } from './water';
 
 interface Floater {
@@ -28,11 +28,19 @@ interface Flyer {
  * Cathedral, priestess, tide tube, particles, god rays, and the rising-water shader.
  * The board sits in the shaken camera so the drown filter covers the whole vault.
  */
+export interface Chrome {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export class Scene {
   readonly world = new Container();
   readonly camera = new Container();
   readonly fx = new Container();
   readonly board: Board;
+  private readonly backdrop = new Container();
   private readonly art: ArtSet;
   private readonly heroes: HeroLibrary;
   private readonly bgs: Sprite[];
@@ -72,22 +80,30 @@ export class Scene {
   private krakenShown = false;
   private portrait = false;
   private flyers: Flyer[] = [];
+  private tideLoop: LoopedVfx | null = null;
+  private tidePulse = 0;
+  private krakenLock = 0;
+  private reduced = false;
+  private cellSize = 96;
+  private characterMounted = false;
 
   constructor(art: ArtSet, heroes: HeroLibrary) {
     this.art = art;
     this.heroes = heroes;
     this.board = new Board(art, heroes);
+    this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.world.addChild(this.camera);
+    this.camera.addChild(this.backdrop);
     this.bgs = art.backgrounds.map((texture) => {
       const sprite = new Sprite(texture);
       sprite.anchor.set(0.5);
-      this.camera.addChild(sprite);
+      this.backdrop.addChild(sprite);
       return sprite;
     });
     this.bgs[1].alpha = 0;
     this.bgs[2].alpha = 0;
     const rayLayer = new Container();
-    this.camera.addChild(rayLayer);
+    this.backdrop.addChild(rayLayer);
     for (let i = 0; i < 7; i++) {
       const ray = new Sprite(art.ray);
       ray.anchor.set(0.5, 0);
@@ -96,7 +112,7 @@ export class Scene {
       this.rays.push(ray);
       rayLayer.addChild(ray);
     }
-    this.camera.addChild(this.moteLayer);
+    this.backdrop.addChild(this.moteLayer);
     this.character = new Sprite(art.character[0]);
     this.character.anchor.set(0.5, 0.92);
     this.camera.addChild(this.character);
@@ -141,7 +157,7 @@ export class Scene {
     for (let i = 0; i < 16; i++) this.addBubble();
     try {
       this.water = createWaterFilter();
-      this.world.filters = [this.water];
+      this.backdrop.filters = [this.water];
     } catch {
       this.water = null;
     }
@@ -152,69 +168,121 @@ export class Scene {
     app.stage.addChild(this.fx);
   }
 
-  layout(width: number, height: number): void {
+  layout(width: number, height: number, chrome?: Chrome): void {
     this.width = width;
     this.height = height;
-    this.portrait = height / width > 1.05;
+    const inset = chrome ?? { top: 72, bottom: 128, left: 14, right: 14 };
+    this.portrait = height > width * 1.02 || width < 860;
     const cover = Math.max(width / 1600, height / 900) * 1.08;
     for (const bg of this.bgs) {
       bg.width = 1600 * cover;
       bg.height = 900 * cover;
       bg.position.set(width / 2, height / 2);
     }
-    const top = this.portrait ? 78 : 66;
-    const bottom = this.portrait ? 196 : 122;
-    const availH = Math.max(200, height - top - bottom);
-    this.tideW = this.portrait ? 36 : 44;
-    let cell: number;
-    if (this.portrait) {
-      cell = Math.min((width - this.tideW - 36) / 6, (availH - 8) / 5);
-      const boardW = cell * 6;
-      const boardH = cell * 5;
-      this.boardX = (width - boardW + this.tideW) / 2;
-      this.boardY = top + Math.max(4, (availH - boardH) * 0.42);
-      this.charH = Math.min(width * 0.36, 200);
-      this.charX = width * 0.5;
-      this.charY = this.boardY + 6;
+    const top = inset.top + 4;
+    const bottomLimit = height - inset.bottom - 6;
+    const leftEdge = inset.left;
+    const availW = Math.max(160, width - inset.left - inset.right);
+    const availH = Math.max(160, bottomLimit - top);
+    this.tideW = this.portrait ? 26 : 46;
+    const gap = 8;
+    let cell = 48;
+    if (!this.portrait) {
+      const charW = Math.min(availW * 0.2, availH * 0.55, 260);
+      cell = Math.floor(Math.min((availW - charW - this.tideW - gap * 3) / COLS, availH / ROWS));
+      cell = Math.max(32, cell);
+      let boardH = cell * ROWS;
+      if (top + boardH > bottomLimit) {
+        cell = Math.max(32, Math.floor((bottomLimit - top) / ROWS));
+        boardH = cell * ROWS;
+      }
+      const boardW = cell * COLS;
+      const cluster = this.tideW + gap + boardW + gap + charW;
+      const start = leftEdge + Math.max(0, (availW - cluster) / 2);
+      this.tideX = start;
+      this.boardX = start + this.tideW + gap;
+      this.boardY = top + Math.max(0, (availH - boardH) / 2);
+      if (this.boardY + boardH > bottomLimit) this.boardY = Math.max(top, bottomLimit - boardH);
+      this.charH = Math.min(boardH * 1.02, bottomLimit - top);
+      const charPixelW = this.charH * 0.7;
+      const rightLimit = width - inset.right - 4;
+      this.charX = this.boardX + boardW + 10 + charPixelW / 2;
+      if (this.charX + charPixelW / 2 > rightLimit) {
+        const room = rightLimit - (this.boardX + boardW + 10);
+        this.charH = room > 70 ? room / 0.7 : 0;
+        this.charX = this.boardX + boardW + 10 + (this.charH * 0.7) / 2;
+      }
+      this.charY = this.boardY + boardH - 2;
     } else {
-      const charSlot = Math.min(width * 0.24, availH * 0.78);
-      cell = Math.min((width - charSlot - this.tideW - 80) / 6, availH / 5);
-      const boardW = cell * 6;
-      const boardH = cell * 5;
-      const cluster = this.tideW + 16 + boardW + charSlot;
-      const left = Math.max(18, (width - cluster) / 2);
-      this.boardX = left + this.tideW + 12;
-      this.boardY = top + (availH - boardH) / 2;
-      this.charH = boardH * 1.06;
-      this.charX = this.boardX + boardW + charSlot * 0.48;
-      this.charY = this.boardY + boardH - 4;
+      cell = Math.floor(Math.min((availW - this.tideW - gap) / COLS, availH / ROWS));
+      cell = Math.max(22, cell);
+      let boardW = cell * COLS;
+      let boardH = cell * ROWS;
+      const extra = availH - boardH;
+      const cluster = this.tideW + gap + boardW;
+      const start = leftEdge + Math.max(0, (availW - cluster) / 2);
+      this.tideX = start;
+      this.boardX = start + this.tideW + gap;
+      if (extra >= 64) {
+        this.charH = Math.min(extra - 8, cell * 2.3, 200);
+        this.boardY = top + this.charH + 2;
+        if (this.boardY + boardH > bottomLimit) {
+          this.charH = Math.max(0, bottomLimit - boardH - top - 2);
+          this.boardY = top + this.charH + 2;
+        }
+        this.charX = this.boardX + boardW / 2;
+        this.charY = this.boardY - Math.max(4, this.charH * 0.1);
+      } else {
+        this.charH = 0;
+        this.charX = leftEdge;
+        this.charY = top;
+        this.boardY = top + Math.max(0, (availH - boardH) / 2);
+      }
+      if (this.boardY + boardH > bottomLimit) {
+        cell = Math.max(22, Math.floor((bottomLimit - this.boardY) / ROWS));
+        boardW = cell * COLS;
+        boardH = cell * ROWS;
+        const cluster2 = this.tideW + gap + boardW;
+        const start2 = leftEdge + Math.max(0, (availW - cluster2) / 2);
+        this.tideX = start2;
+        this.boardX = start2 + this.tideW + gap;
+        this.charX = this.boardX + boardW / 2;
+      }
     }
-    const boardH = cell * 5;
+    this.cellSize = cell;
+    const boardH = cell * ROWS;
+    const boardW = cell * COLS;
     this.board.layout(cell);
     this.board.root.position.set(this.boardX, this.boardY);
-    this.tideH = boardH * 0.76;
-    this.tideX = this.boardX - this.tideW - 10;
+    this.tideH = Math.max(72, boardH * 0.78);
     this.tideY = this.boardY + (boardH - this.tideH) / 2;
+    if (this.charH > 0 && !this.portrait && this.charX - this.charH * 0.35 < this.boardX + boardW) {
+      this.charX = this.boardX + boardW + 10 + this.charH * 0.35;
+    }
     this.placeCharacter();
     this.drawTide();
+    this.syncTideOverlay();
     this.rays.forEach((ray, i) => {
       ray.height = height * 1.2;
       ray.width = 64 + (i % 3) * 40;
       ray.position.set(width * (0.08 + i * 0.13), -10);
       ray.rotation = -0.38 + i * 0.11;
     });
-    this.world.filterArea = new Rectangle(0, 0, width, height);
+    this.backdrop.filterArea = new Rectangle(0, 0, width, height);
   }
 
   update(dt: number): void {
     this.time += dt;
     this.board.update(this.time);
     this.shakeAmp *= Math.exp(-dt * 5.5);
-    this.camera.position.set((Math.random() - 0.5) * this.shakeAmp, (Math.random() - 0.5) * this.shakeAmp);
+    const sway = this.reduced ? 0 : 1;
+    this.camera.position.set((Math.random() - 0.5) * this.shakeAmp * sway, (Math.random() - 0.5) * this.shakeAmp * sway);
     this.board.root.position.set(
-      this.boardX + Math.sin(this.time * 0.45) * 1.6,
-      this.boardY + Math.cos(this.time * 0.33) * 1.1,
+      this.boardX + Math.sin(this.time * 0.45) * 1.6 * sway,
+      this.boardY + Math.cos(this.time * 0.33) * 1.1 * sway,
     );
+    this.tidePulse *= Math.exp(-dt * 2.4);
+    if (this.inFs || this.tidePulse > 0.03) this.drawTide();
     this.level += (this.levelTarget - this.level) * Math.min(1, dt * 2.2);
     this.stageMix += (this.stageTarget - this.stageMix) * Math.min(1, dt * 1.6);
     this.bgs[1].alpha = clamp(this.stageMix, 0, 1);
@@ -222,7 +290,7 @@ export class Scene {
     this.writeWater();
     if (this.time > this.castUntil) this.idlePose();
     this.placeCharacter();
-    const bob = Math.sin(this.time * 1.25) * 5;
+    const bob = this.reduced ? 0 : Math.sin(this.time * 1.25) * 5;
     this.character.y = this.charY + bob;
     if (this.idleAnim) this.idleAnim.y = this.charY + bob;
     if (this.castAnim) this.castAnim.y = this.charY + bob;
@@ -234,6 +302,7 @@ export class Scene {
   }
 
   shake(power: number): void {
+    if (this.reduced) return;
     this.shakeAmp = Math.max(this.shakeAmp, power);
   }
 
@@ -252,9 +321,10 @@ export class Scene {
     const nextStage = inFs ? tideStage(meter) : 0;
     if (nextStage >= 2 && this.stageTarget < 2 && !this.krakenShown) {
       this.krakenShown = true;
-      spawnVfx(this.heroes, 'kraken', 'sweep', this.width * 0.18, this.height * 0.62, 0.6);
+      this.krakenSweep();
     }
     if (nextStage < 2) this.krakenShown = false;
+    const previousMeter = this.tideMeter;
     this.tideMeter = meter;
     this.inFs = inFs;
     this.stageTarget = nextStage;
@@ -266,9 +336,87 @@ export class Scene {
       this.bgs[2].alpha = clamp(this.stageMix - 1, 0, 1);
       this.writeWater();
     }
-    this.tideRoot.alpha = inFs ? 1 : 0.7;
+    if (inFs && meter > previousMeter) this.tidePulse = 1;
+    this.tideRoot.alpha = inFs ? 1 : 0.72;
     this.tideText.text = inFs ? `×${meter}` : '—';
     this.drawTide();
+    this.syncTideOverlay();
+  }
+
+  pulseTide(): void {
+    this.tidePulse = 1;
+    this.drawTide();
+  }
+
+  /** Kraken crosses the vault on a long tumble chain or when the throne wakes. */
+  krakenSweep(): void {
+    const now = performance.now();
+    if (now < this.krakenLock) return;
+    this.krakenLock = now + 1500;
+    attachLayer(this.heroes, 'kraken', this.fx);
+    const boardW = this.cellSize * COLS;
+    const scale = Math.max(0.35, boardW / 364);
+    spawnVfx(this.heroes, 'kraken', 'sweep', this.boardX + boardW * 0.42, this.boardY + this.cellSize * ROWS * 0.55, scale);
+  }
+
+  /**
+   * The seal clip's bubble ring is faint, so the trigger draws its own
+   * expanding rings and a spray of bubbles on top of the crack.
+   */
+  sealWave(points: { x: number; y: number }[]): void {
+    for (const point of points) {
+      for (let ring = 0; ring < 3; ring++) {
+        const graphic = new Graphics();
+        graphic.circle(0, 0, 16).stroke({ width: 4, color: ring === 1 ? 0xff4fa3 : 0xe8fffb, alpha: 1 });
+        graphic.circle(0, 0, 28).stroke({ width: 2, color: 0x7ef6ff, alpha: 0.8 });
+        graphic.position.set(point.x, point.y);
+        this.fx.addChild(graphic);
+        const born = performance.now() + ring * 110;
+        const life = 780;
+        const step = () => {
+          const t = (performance.now() - born) / life;
+          if (t < 0) {
+            requestAnimationFrame(step);
+            return;
+          }
+          if (t >= 1 || graphic.destroyed) {
+            if (!graphic.destroyed) graphic.destroy();
+            return;
+          }
+          graphic.scale.set(1 + t * 5.5);
+          graphic.alpha = (1 - t) * 0.9;
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+      for (let i = 0; i < 12; i++) {
+        const sprite = new Sprite(this.art.bubble);
+        sprite.anchor.set(0.5);
+        sprite.blendMode = 'add';
+        const size = 12 + (i % 4) * 8;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.position.set(point.x, point.y);
+        this.fx.addChild(sprite);
+        const angle = (i / 12) * Math.PI * 2;
+        const speed = 70 + (i % 5) * 28;
+        const born = performance.now();
+        const life = 620 + (i % 3) * 80;
+        const step = () => {
+          const t = (performance.now() - born) / life;
+          if (t >= 1 || sprite.destroyed) {
+            if (!sprite.destroyed) sprite.destroy();
+            return;
+          }
+          const wave = Math.sin(t * Math.PI);
+          sprite.position.set(point.x + Math.cos(angle) * speed * t, point.y + Math.sin(angle) * speed * t * 0.72 - t * 36);
+          sprite.alpha = wave;
+          sprite.scale.set(1 + t);
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+    }
   }
 
   tideGlobal(): { x: number; y: number } {
@@ -303,7 +451,8 @@ export class Scene {
       };
       requestAnimationFrame(step);
     }
-    spawnVfx(this.heroes, 'bubbles', 'pop', global.x, global.y, 0.35);
+    attachLayer(this.heroes, 'bubbles', this.fx);
+    spawnVfx(this.heroes, 'bubbles', 'pop', global.x, global.y, 0.42);
   }
 
   popup(text: string, x: number, y: number): void {
@@ -312,7 +461,7 @@ export class Scene {
       style: {
         fill: '#fff6d2',
         fontFamily: 'Palatino Linotype, Palatino, Georgia, serif',
-        fontSize: 28,
+        fontSize: 42,
         fontWeight: '700',
         stroke: { color: '#04141c', width: 4 },
       },
@@ -322,12 +471,13 @@ export class Scene {
     this.fx.addChild(label);
     const born = performance.now();
     const step = () => {
-      const t = (performance.now() - born) / 720;
+      const t = (performance.now() - born) / 1100;
       if (t >= 1) {
         label.destroy();
         return;
       }
-      label.y = y - t * 40;
+      label.y = y - t * 72;
+      label.scale.set(1 + Math.sin(Math.min(1, t) * Math.PI) * 0.18);
       label.alpha = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
       requestAnimationFrame(step);
     };
@@ -383,7 +533,7 @@ export class Scene {
       uniforms.uLevel = this.level;
       uniforms.uStage = this.stageMix;
     } catch {
-      this.world.filters = [];
+      this.backdrop.filters = [];
       this.water = null;
     }
   }
@@ -442,8 +592,33 @@ export class Scene {
     }
   }
 
+  adoptHeroes(): void {
+    this.mountCharacter(this.heroes.clips.get('tidecaller') ?? null);
+    attachLayer(this.heroes, 'tide', this.backdrop);
+    attachLayer(this.heroes, 'kraken', this.fx);
+    attachLayer(this.heroes, 'bubbles', this.fx);
+    this.placeCharacter();
+    this.board.repaint();
+    this.syncTideOverlay();
+  }
+
+  private syncTideOverlay(): void {
+    if (!this.inFs) {
+      this.tideLoop?.kill();
+      this.tideLoop = null;
+      return;
+    }
+    attachLayer(this.heroes, 'tide', this.backdrop);
+    const scale = Math.max(0.45, this.width / 720);
+    const x = this.width / 2;
+    const y = this.height * 0.86;
+    if (!this.tideLoop) this.tideLoop = spawnLoop(this.heroes, 'tide', 'overlay', x, y, scale, 0.78);
+    this.tideLoop?.set(x, y, scale, 0.78);
+  }
+
   private mountCharacter(asset: PixiOpal | null): void {
-    if (!asset?.clips.idle) return;
+    if (this.characterMounted || !asset?.clips.idle) return;
+    this.characterMounted = true;
     this.idleAnim = asset.sprite('idle', { anchor: asset.feetAnchor('idle') });
     this.camera.addChild(this.idleAnim);
     this.character.visible = false;
@@ -456,6 +631,13 @@ export class Scene {
   }
 
   private placeCharacter(): void {
+    const show = this.charH >= 48;
+    if (!show) {
+      this.character.visible = false;
+      if (this.idleAnim) this.idleAnim.visible = false;
+      if (this.castAnim) this.castAnim.visible = false;
+      return;
+    }
     const aspect = this.character.texture.width / Math.max(1, this.character.texture.height);
     this.character.height = this.charH;
     this.character.width = this.charH * aspect;
@@ -466,21 +648,34 @@ export class Scene {
       anim.scale.x = Math.abs(anim.scale.y);
       anim.position.set(this.charX, this.character.y || this.charY);
     }
+    if (this.idleAnim) {
+      this.character.visible = false;
+      if (!this.castAnim?.visible) this.idleAnim.visible = true;
+    } else {
+      this.character.visible = true;
+    }
   }
 
   private drawTide(): void {
     const w = this.tideW;
     const h = this.tideH;
     this.tideRoot.position.set(this.tideX, this.tideY);
-    const fill = this.inFs ? Math.max(0.05, Math.min(1, this.tideMeter / TIDE_THRONE)) : 0.07;
-    const fh = (h - 14) * fill;
+    const fill = this.inFs ? Math.max(0.06, Math.min(1, this.tideMeter / TIDE_THRONE)) : 0.08;
+    const fh = (h - 18) * fill;
     const color = this.stageTarget >= 2 ? 0xff4fa3 : this.stageTarget >= 1 ? 0x6aa6ff : 0x3ef6ea;
+    const pulse = 0.35 + this.tidePulse * 0.65 + (this.inFs ? Math.sin(this.time * 4) * 0.08 : 0);
     this.tideGlass.clear();
-    this.tideGlass.roundRect(0, 0, w, h, 18).fill({ color: 0x02141c, alpha: 0.8 });
-    this.tideGlass.roundRect(5, h - 7 - fh, w - 10, fh, 12).fill({ color, alpha: 0.92 });
-    this.tideGlass.roundRect(0, 0, w, h, 18).stroke({ width: 2, color: 0x7ef6ff, alpha: 0.9 });
-    this.tideLabel.position.set(w / 2, -6);
-    this.tideText.position.set(w / 2, h + 4);
+    this.tideGlass.roundRect(-3, -3, w + 6, h + 6, 20).stroke({ width: 3, color: 0xf3d48a, alpha: 0.95 });
+    this.tideGlass.roundRect(0, 0, w, h, 16).fill({ color: 0x02141c, alpha: 0.88 });
+    this.tideGlass.roundRect(6, h - 9 - fh, w - 12, fh, 10).fill({ color, alpha: 0.95 });
+    this.tideGlass.roundRect(6, h - 9 - fh, w - 12, Math.min(fh, 10), 8).fill({ color: 0xffffff, alpha: 0.28 * pulse });
+    for (const mark of [15, 50]) {
+      const y = h - 9 - (h - 18) * Math.min(1, mark / TIDE_THRONE);
+      this.tideGlass.moveTo(4, y).lineTo(w - 4, y).stroke({ width: 1, color: 0xfff6d2, alpha: 0.45 });
+    }
+    this.tideGlass.roundRect(0, 0, w, h, 16).stroke({ width: 2, color: 0x7ef6ff, alpha: 0.55 + pulse * 0.4 });
+    this.tideLabel.position.set(w / 2, -8);
+    this.tideText.position.set(w / 2, h + 6);
   }
 
   private addBubble(): void {

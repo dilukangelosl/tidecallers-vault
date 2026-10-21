@@ -2,6 +2,8 @@ import { Texture } from 'pixi.js';
 
 export interface ArtSet {
   symbols: Texture[];
+  /** PNG data URLs, index-aligned with `symbols`, for the paytable. */
+  icons: string[];
   sealCrack: Texture;
   backgrounds: Texture[];
   character: Texture[];
@@ -73,36 +75,46 @@ function gem(color: string, deep: string, ink: string): Texture {
   return Texture.from(c);
 }
 
-function medallion(ctx: CanvasRenderingContext2D, rim: string, core: string): void {
-  glow(ctx, 128, 128, 118, core, 0.45);
-  const g = ctx.createRadialGradient(110, 100, 20, 128, 128, 108);
-  g.addColorStop(0, '#16343c');
-  g.addColorStop(0.7, '#07141a');
-  g.addColorStop(1, '#03080c');
+function plate(ctx: CanvasRenderingContext2D, rim: string, core: string, shape: 'shell' | 'arch' | 'tablet' | 'crest'): void {
+  glow(ctx, 128, 132, 122, core, 0.5);
+  ctx.save();
+  ctx.translate(128, 132);
   ctx.beginPath();
-  ctx.arc(128, 128, 104, 0, Math.PI * 2);
+  if (shape === 'shell') {
+    ctx.moveTo(-78, 18);
+    ctx.bezierCurveTo(-96, -78, 96, -78, 78, 18);
+    ctx.bezierCurveTo(44, 86, -44, 86, -78, 18);
+  } else if (shape === 'arch') {
+    ctx.moveTo(-80, 70);
+    ctx.lineTo(-80, -8);
+    ctx.bezierCurveTo(-80, -96, 80, -96, 80, -8);
+    ctx.lineTo(80, 70);
+    ctx.closePath();
+  } else if (shape === 'tablet') {
+    ctx.roundRect(-58, -102, 116, 196, 22);
+  } else {
+    ctx.moveTo(0, -104);
+    ctx.bezierCurveTo(92, -72, 84, 36, 0, 100);
+    ctx.bezierCurveTo(-84, 36, -92, -72, 0, -104);
+  }
+  const g = ctx.createLinearGradient(-50, -90, 46, 96);
+  g.addColorStop(0, '#245860');
+  g.addColorStop(0.42, '#0d2830');
+  g.addColorStop(1, '#040c10');
   ctx.fillStyle = g;
   ctx.fill();
   ctx.lineWidth = 8;
   ctx.strokeStyle = rim;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(128, 128, 90, 0, Math.PI * 2);
   ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
   ctx.stroke();
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.arc(128 + Math.cos(a) * 96, 128 + Math.sin(a) * 96, 3, 0, Math.PI * 2);
-    ctx.fillStyle = i % 3 === 0 ? '#ff4ad8' : '#e8fff8';
-    ctx.fill();
-  }
+  ctx.restore();
 }
 
 function chalice(): Texture {
   const [c, ctx] = canvas(256);
-  medallion(ctx, '#d7b15a', '#3ef0ff');
+  plate(ctx, '#f0c56a', '#3ef0ff', 'shell');
   ctx.save();
   ctx.translate(128, 132);
   ctx.strokeStyle = '#f3e2b0';
@@ -138,7 +150,7 @@ function chalice(): Texture {
 
 function crown(): Texture {
   const [c, ctx] = canvas(256);
-  medallion(ctx, '#f0c15b', '#ffd27a');
+  plate(ctx, '#ffe08a', '#ffd27a', 'arch');
   ctx.save();
   ctx.translate(128, 136);
   ctx.strokeStyle = '#ffe7a8';
@@ -172,7 +184,7 @@ function crown(): Texture {
 
 function trident(): Texture {
   const [c, ctx] = canvas(256);
-  medallion(ctx, '#9be7ff', '#3ef0ff');
+  plate(ctx, '#bffcff', '#3ef0ff', 'tablet');
   ctx.save();
   ctx.translate(128, 128);
   ctx.strokeStyle = '#e9fbff';
@@ -201,36 +213,57 @@ function trident(): Texture {
 
 function ring(): Texture {
   const [c, ctx] = canvas(256);
-  medallion(ctx, '#ff4ad8', '#ff7ad2');
-  ctx.save();
-  ctx.translate(128, 128);
-  ctx.lineWidth = 14;
+  glow(ctx, 128, 128, 118, '#ff4ad8', 0.45);
+  const g = ctx.createLinearGradient(70, 40, 190, 220);
+  g.addColorStop(0, '#fff6fb');
+  g.addColorStop(0.2, '#ffd0ec');
+  g.addColorStop(0.55, '#d23b7a');
+  g.addColorStop(1, '#3a1024');
+  ctx.beginPath();
+  ctx.moveTo(128, 36);
+  ctx.lineTo(196, 84);
+  ctx.lineTo(184, 176);
+  ctx.lineTo(128, 220);
+  ctx.lineTo(72, 176);
+  ctx.lineTo(60, 84);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(128, 128, 46, 0, Math.PI * 2);
+  ctx.lineWidth = 16;
   ctx.strokeStyle = '#f0c15b';
-  ctx.beginPath();
-  ctx.arc(0, 4, 36, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#ff4ad8';
-  ctx.beginPath();
-  ctx.moveTo(30, 10);
-  ctx.bezierCurveTo(48, -30, -10, -60, -20, -20);
-  ctx.bezierCurveTo(-28, 10, 10, 40, 34, 18);
   ctx.stroke();
   ctx.beginPath();
-  ctx.ellipse(0, 4, 10, 6, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#ff4ad8';
+  ctx.arc(128, 128, 46, 0, Math.PI * 2);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#fff6d2';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(128, 36);
+  ctx.lineTo(128, 220);
+  ctx.moveTo(60, 84);
+  ctx.lineTo(196, 84);
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(108, 78, 16, 7, -0.6, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(-2, 3, 3, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(128, 128, 12, 8, 0, 0, Math.PI * 2);
   ctx.fillStyle = '#041016';
   ctx.fill();
-  ctx.restore();
   return Texture.from(c);
 }
 
 function mask(): Texture {
   const [c, ctx] = canvas(256);
-  medallion(ctx, '#7ef6ff', '#ff4ad8');
+  plate(ctx, '#7ef6ff', '#ff4ad8', 'crest');
   ctx.save();
   ctx.translate(128, 132);
   const face = ctx.createLinearGradient(0, -50, 0, 50);
@@ -270,7 +303,8 @@ function mask(): Texture {
 
 function seal(cracked: boolean): Texture {
   const [c, ctx] = canvas(256);
-  glow(ctx, 128, 128, 120, cracked ? '#ff4ad8' : '#3ef0ff', 0.6);
+  glow(ctx, 128, 128, 150, cracked ? '#ffd0f2' : '#f4fffe', 0.95);
+  glow(ctx, 128, 128, 108, cracked ? '#ff4ad8' : '#3ef0ff', 0.9);
   ctx.beginPath();
   ctx.arc(128, 128, 100, 0, Math.PI * 2);
   const g = ctx.createRadialGradient(110, 100, 10, 128, 128, 100);
@@ -279,8 +313,8 @@ function seal(cracked: boolean): Texture {
   g.addColorStop(1, '#070d12');
   ctx.fillStyle = g;
   ctx.fill();
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = cracked ? '#ffd0f2' : '#b7fff4';
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = cracked ? '#ffe6f7' : '#f3fffd';
   ctx.stroke();
   ctx.save();
   ctx.translate(128, 128);
@@ -621,22 +655,29 @@ function mote(): Texture {
   return Texture.from(c);
 }
 
+function iconOf(texture: Texture): string {
+  const source = texture.source as { resource?: CanvasImageSource };
+  return source.resource instanceof HTMLCanvasElement ? source.resource.toDataURL('image/png') : '';
+}
+
 export function buildArt(): ArtSet {
+  const symbols = [
+    gem('#7ef6ff', '#147c8c', '#042026'),
+    gem('#b6ff7a', '#3c9a40', '#10240c'),
+    gem('#d2b0ff', '#7a46c4', '#1a1030'),
+    gem('#ffd27a', '#d4922a', '#2a1806'),
+    gem('#ff8aa6', '#d23b5c', '#2a0a12'),
+    chalice(),
+    crown(),
+    trident(),
+    ring(),
+    mask(),
+    seal(false),
+    jelly(),
+  ];
   return {
-    symbols: [
-      gem('#7ef6ff', '#147c8c', '#042026'),
-      gem('#b6ff7a', '#3c9a40', '#10240c'),
-      gem('#d2b0ff', '#7a46c4', '#1a1030'),
-      gem('#ffd27a', '#d4922a', '#2a1806'),
-      gem('#ff8aa6', '#d23b5c', '#2a0a12'),
-      chalice(),
-      crown(),
-      trident(),
-      ring(),
-      mask(),
-      seal(false),
-      jelly(),
-    ],
+    symbols,
+    icons: symbols.map(iconOf),
     sealCrack: seal(true),
     backgrounds: [background(0), background(1), background(2)],
     character: [character('idle'), character('cast')],

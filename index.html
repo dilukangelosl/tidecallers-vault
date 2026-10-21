@@ -29,8 +29,10 @@
             </div>
           </div>
           <div class="top-actions">
-            <button id="mute" type="button" aria-label="Mute">Sound</button>
-            <button id="info" type="button" aria-label="Paytable and rules">Rules</button>
+            <button id="history-open" type="button" aria-expanded="false" aria-controls="history">History</button>
+            <button id="mute" type="button" aria-pressed="false" aria-label="Mute">Sound</button>
+            <button id="sound-more" type="button" aria-expanded="false" aria-controls="sound-menu" aria-label="Music and effects volume">Vol</button>
+            <button id="info" type="button" aria-expanded="false" aria-controls="rules" aria-label="Paytable and rules">Rules</button>
           </div>
         </header>
         <div id="fsbar" hidden>
@@ -43,30 +45,71 @@
           <div class="bet">
             <button id="bet-down" type="button" aria-label="Lower bet">−</button>
             <div>
-              <span>Bet</span>
+              <span id="bet-label">Bet</span>
               <strong id="bet">1.00</strong>
             </div>
             <button id="bet-up" type="button" aria-label="Raise bet">+</button>
           </div>
           <button id="spin" type="button" class="spin">Spin</button>
           <div class="stack">
-            <button id="turbo" type="button" class="toggle">Turbo</button>
-            <button id="auto" type="button" class="toggle">Auto</button>
+            <button id="turbo" type="button" class="toggle" aria-pressed="false">Turbo</button>
+            <button id="auto" type="button" class="toggle" aria-expanded="false" aria-controls="auto-menu">Auto</button>
           </div>
-          <button id="buy-open" type="button" class="buy">Bonus</button>
+          <button id="buy-open" type="button" class="buy" aria-expanded="false" aria-controls="buy">Bonus</button>
           <button id="refill" type="button" hidden>Refill</button>
         </footer>
         <div id="auto-menu" hidden>
-          <button type="button" data-spins="10">10</button>
-          <button type="button" data-spins="25">25</button>
-          <button type="button" data-spins="50">50</button>
-          <button type="button" data-spins="100">100</button>
+          <p>Spins</p>
+          <div class="row">
+            <button type="button" data-spins="10">10</button>
+            <button type="button" data-spins="25">25</button>
+            <button type="button" data-spins="50">50</button>
+            <button type="button" data-spins="100">100</button>
+          </div>
+          <p>Stop on loss</p>
+          <div class="row">
+            <button type="button" data-loss="0" class="on">Off</button>
+            <button type="button" data-loss="10">10×</button>
+            <button type="button" data-loss="25">25×</button>
+            <button type="button" data-loss="50">50×</button>
+            <button type="button" data-loss="100">100×</button>
+          </div>
+          <p>Stop on a single win</p>
+          <div class="row">
+            <button type="button" data-win="0" class="on">Off</button>
+            <button type="button" data-win="20">20×</button>
+            <button type="button" data-win="50">50×</button>
+            <button type="button" data-win="100">100×</button>
+          </div>
+          <label class="check"><input id="stop-feature" type="checkbox" /> Stop when a feature starts</label>
         </div>
+        <div id="sound-menu" hidden>
+          <label>Music <input id="music" type="range" min="0" max="100" value="100" /></label>
+          <label>Effects <input id="sfx" type="range" min="0" max="100" value="100" /></label>
+        </div>
+        <aside id="history" hidden>
+          <header>
+            <h2>Rounds</h2>
+            <button id="history-close" type="button">Close</button>
+          </header>
+          <ol id="history-list"></ol>
+        </aside>
         <p id="toast" hidden></p>
       </div>
       <div id="ceremony" hidden>
+        <div id="ceremony-burst"></div>
         <p id="ceremony-title">Big Win</p>
         <p id="ceremony-amount">0.00</p>
+      </div>
+      <div id="feature-card" hidden>
+        <p id="feature-kicker">Free spins</p>
+        <h2 id="feature-title">The vault opens</h2>
+        <p id="feature-sub">15 free spins</p>
+      </div>
+      <div id="loading">
+        <p class="eyebrow">Sunken cathedral</p>
+        <h2>Tidecaller's Vault</h2>
+        <div class="loading-bar"></div>
       </div>
       <dialog id="rules">
         <div class="dialog-card">
