@@ -1,0 +1,365 @@
+:root {
+  color-scheme: dark;
+  --ink: #e7fffb;
+  --dim: #8fbfc4;
+  --cyan: #7ef6ff;
+  --magenta: #ff4fa3;
+  --gold: #f3d48a;
+  --panel: rgba(3, 16, 22, 0.72);
+  --line: rgba(126, 246, 255, 0.45);
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #021014;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+#stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 18px 16px;
+}
+
+#ui button, #ui .bet, #auto-menu, #toast { pointer-events: auto; }
+
+button, dialog {
+  font: inherit;
+  color: inherit;
+}
+
+.top, .dock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.top {
+  justify-content: space-between;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 40px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(126, 246, 255, 0.85), 0 0 28px rgba(255, 79, 163, 0.35);
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--gold);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.readout {
+  display: flex;
+  gap: 10px;
+}
+
+.meter, .bet, .dock > button, .top-actions button, .buy-grid button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 79, 163, 0.12);
+}
+
+.meter {
+  min-width: 132px;
+  padding: 8px 14px 10px;
+}
+
+.meter span, .bet span, .buy-grid small {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.meter strong, .bet strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-actions { display: flex; gap: 8px; }
+
+.top-actions button, .toggle, .buy, #refill, .bet button, .dialog-card header button {
+  background: rgba(6, 24, 32, 0.8);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.toggle.on, #mute.on {
+  color: #04141c;
+  background: linear-gradient(180deg, #d9fff8, var(--cyan));
+  border-color: transparent;
+}
+
+.dock { justify-content: center; }
+
+.bet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.bet button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 22px;
+}
+
+.bet div { min-width: 84px; text-align: center; }
+
+.spin {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 2px solid #f4ffff;
+  background:
+    radial-gradient(circle at 35% 30%, #ffffff, #bffcff 18%, #1ad4e4 46%, #0b6274 78%);
+  color: #042028;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 0 6px rgba(126, 246, 255, 0.12), 0 0 32px rgba(26, 212, 228, 0.8);
+}
+
+.spin.stop {
+  background: radial-gradient(circle at 35% 30%, #fff, #ffd0e6 20%, #ff4fa3 70%);
+  box-shadow: 0 0 28px rgba(255, 79, 163, 0.75);
+}
+
+.stack { display: flex; flex-direction: column; gap: 8px; }
+
+.buy {
+  min-width: 92px;
+  padding: 16px 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+button:disabled { opacity: 0.4; cursor: default; }
+
+#fsbar, #banner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
+}
+
+#fsbar {
+  top: 86px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 18px;
+  border-radius: 14px;
+  background: rgba(4, 16, 24, 0.55);
+  border: 1px solid rgba(255, 79, 163, 0.45);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#fsbar[hidden], #banner[hidden], #ceremony[hidden], #toast[hidden], #auto-menu[hidden] { display: none; }
+
+#fs-count { font-size: 22px; color: var(--gold); letter-spacing: 0.08em; }
+
+#banner {
+  top: 38%;
+  font-size: clamp(28px, 5vw, 64px);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 0 24px var(--cyan), 0 0 42px var(--magenta);
+}
+
+#ceremony {
+  position: absolute;
+  inset: 0;
+  place-items: center;
+  align-content: center;
+  background: radial-gradient(circle at center, rgba(4, 18, 28, 0.15), rgba(1, 6, 10, 0.72));
+  z-index: 4;
+  cursor: pointer;
+  text-align: center;
+}
+
+#ceremony-title {
+  margin: 0;
+  font-size: clamp(42px, 8vw, 104px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 0 20px var(--cyan), 0 0 48px var(--magenta);
+  animation: glow 0.9s ease-in-out infinite alternate;
+}
+
+#ceremony.epic #ceremony-title { color: #ffe08a; }
+#ceremony.legendary #ceremony-title { color: #ffd0ea; }
+
+#ceremony-amount {
+  margin: 8px 0 0;
+  font-size: clamp(36px, 6vw, 84px);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(243, 212, 138, 0.8);
+}
+
+#ceremony:not([hidden]) { display: grid; }
+#ceremony[hidden] { display: none; }
+
+@keyframes glow {
+  from { transform: scale(1); filter: brightness(1); }
+  to { transform: scale(1.04); filter: brightness(1.25); }
+}
+
+#auto-menu {
+  position: absolute;
+  right: 18px;
+  bottom: 118px;
+  display: flex;
+  gap: 8px;
+}
+
+#auto-menu button, #toast, #boot-error {
+  background: rgba(4, 16, 22, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+#toast, #boot-error {
+  position: absolute;
+  left: 50%;
+  bottom: 132px;
+  transform: translateX(-50%);
+  margin: 0;
+}
+
+#boot-error {
+  z-index: 6;
+  bottom: auto;
+  top: 45%;
+}
+
+dialog {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: min(720px, calc(100vw - 24px));
+  width: 100%;
+}
+
+dialog::backdrop { background: rgba(1, 6, 10, 0.72); }
+
+.dialog-card {
+  background: linear-gradient(180deg, rgba(8, 28, 36, 0.96), rgba(3, 12, 16, 0.96));
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 18px 18px 22px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  max-height: min(80vh, 760px);
+  overflow: auto;
+}
+
+.dialog-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.dialog-card h2, .dialog-card h3 { margin: 0; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.lede, .rules p { color: #d5f4f2; line-height: 1.45; }
+
+.pay-row {
+  display: grid;
+  grid-template-columns: 18px 1.4fr repeat(3, 0.6fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(126, 246, 255, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+
+.pay-head { color: var(--dim); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.buy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.buy-grid button {
+  text-align: left;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.buy-grid strong { display: block; font-size: 28px; color: var(--gold); margin: 6px 0; }
+
+.note { color: var(--magenta); }
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+@media (max-width: 820px), (max-aspect-ratio: 4/5) {
+  #ui { padding: 10px 10px 12px; }
+  .brand h1 { font-size: 18px; letter-spacing: 0.06em; }
+  .eyebrow { display: none; }
+  .meter { min-width: 0; padding: 6px 10px; }
+  .meter strong, .bet strong { font-size: 16px; }
+  .dock {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas:
+      "ante spin buy"
+      "bet stack stack";
+    justify-items: center;
+    align-items: center;
+    gap: 8px;
+  }
+  #ante { grid-area: ante; }
+  .spin { grid-area: spin; width: 84px; height: 84px; }
+  #buy-open { grid-area: buy; }
+  .bet { grid-area: bet; }
+  .stack { grid-area: stack; flex-direction: row; }
+  #refill { grid-column: 1 / -1; }
+  #fsbar { top: 64px; }
+  #auto-menu { bottom: 168px; right: 10px; }
+  .buy-grid { grid-template-columns: 1fr; }
+}

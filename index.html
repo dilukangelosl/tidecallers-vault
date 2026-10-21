@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Tidecaller's Vault</title>
+    <link rel="icon" href="./favicon.svg" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #021014; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stage"></canvas>
+      <div id="ui">
+        <header class="top">
+          <div class="brand">
+            <p class="eyebrow">Sunken cathedral</p>
+            <h1>Tidecaller's Vault</h1>
+          </div>
+          <div class="readout">
+            <div class="meter">
+              <span>Win</span>
+              <strong id="win">0.00</strong>
+            </div>
+            <div class="meter">
+              <span>Credits</span>
+              <strong id="balance">5,000.00</strong>
+            </div>
+          </div>
+          <div class="top-actions">
+            <button id="mute" type="button" aria-label="Mute">Sound</button>
+            <button id="info" type="button" aria-label="Paytable and rules">Rules</button>
+          </div>
+        </header>
+        <div id="fsbar" hidden>
+          <span id="fs-kicker">Free spins</span>
+          <strong id="fs-count">1 / 15</strong>
+        </div>
+        <div id="banner" hidden></div>
+        <footer class="dock">
+          <button id="ante" type="button" class="toggle">Ante 1.25×</button>
+          <div class="bet">
+            <button id="bet-down" type="button" aria-label="Lower bet">−</button>
+            <div>
+              <span>Bet</span>
+              <strong id="bet">1.00</strong>
+            </div>
+            <button id="bet-up" type="button" aria-label="Raise bet">+</button>
+          </div>
+          <button id="spin" type="button" class="spin">Spin</button>
+          <div class="stack">
+            <button id="turbo" type="button" class="toggle">Turbo</button>
+            <button id="auto" type="button" class="toggle">Auto</button>
+          </div>
+          <button id="buy-open" type="button" class="buy">Bonus</button>
+          <button id="refill" type="button" hidden>Refill</button>
+        </footer>
+        <div id="auto-menu" hidden>
+          <button type="button" data-spins="10">10</button>
+          <button type="button" data-spins="25">25</button>
+          <button type="button" data-spins="50">50</button>
+          <button type="button" data-spins="100">100</button>
+        </div>
+        <p id="toast" hidden></p>
+      </div>
+      <div id="ceremony" hidden>
+        <p id="ceremony-title">Big Win</p>
+        <p id="ceremony-amount">0.00</p>
+      </div>
+      <dialog id="rules">
+        <div class="dialog-card">
+          <header>
+            <h2>Paytable &amp; rules</h2>
+            <button id="rules-close" type="button" aria-label="Close">Close</button>
+          </header>
+          <div id="paytable"></div>
+          <div id="rules-copy"></div>
+        </div>
+      </dialog>
+      <dialog id="buy">
+        <div class="dialog-card">
+          <header>
+            <h2>Open the vault</h2>
+            <button id="buy-close" type="button" aria-label="Close">Close</button>
+          </header>
+          <p class="lede">Skip the drowned nave and begin in free spins. The price is a multiple of the current bet.</p>
+          <div class="buy-grid">
+            <button id="buy-feature" type="button">
+              <span>Bonus Buy</span>
+              <strong id="buy-price">100.00</strong>
+              <small>15 free spins</small>
+            </button>
+            <button id="super-feature" type="button">
+              <span>Super Buy</span>
+              <strong id="super-price">500.00</strong>
+              <small>Tide Meter starts at ×10</small>
+            </button>
+          </div>
+          <p id="buy-note" class="note" hidden>Ante Bet is on, so buys are closed.</p>
+        </div>
+      </dialog>
+      <p id="boot-error" hidden>The vault could not open in this browser.</p>
+      <p id="live" class="sr" aria-live="polite"></p>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
