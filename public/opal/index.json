@@ -1,3 +1,3 @@
 {
-  "files": []
+  "files": ["tidecaller.opal", "jellyfish.opal", "vault-seal.opal", "kraken.opal", "bubbles.opal", "tide.opal"]
 }
